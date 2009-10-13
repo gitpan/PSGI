@@ -1,0 +1,21 @@
+---
+abstract: 'Perl Web Server Gateway Interface Specification'
+author:
+  - 'Tatsuhiko Miyagawa <miyagawa@bulknews.net>'
+build_requires:
+  ExtUtils::MakeMaker: 6.42
+configure_requires:
+  ExtUtils::MakeMaker: 6.42
+distribution_type: module
+generated_by: 'Module::Install version 0.910'
+license: unknown
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: PSGI
+no_index:
+  directory:
+    - inc
+resources:
+  repository: git://github.com/miyagawa/psgi-specs.git
+version: 1.0
