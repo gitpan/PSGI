@@ -18,4 +18,4 @@ no_index:
     - inc
 resources:
   repository: git://github.com/miyagawa/psgi-specs.git
-version: 1.01
+version: 1.00
