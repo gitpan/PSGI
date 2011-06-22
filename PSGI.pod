@@ -22,19 +22,44 @@ encouraged to use frameworks that support PSGI.
 
 =over 4
 
-=item Servers
+=item Web Servers
 
-A I<Server> is a web server that accepts HTTP requests, dispatches the
-request to web applications, and returns the HTTP response to the
-client. In the context of PSGI the server could be a Perl process running
-inside an HTTP server (e.g. mod_perl in Apache), a daemon process
-called from a web server (e.g. FastCGI daemon) or a pure perl HTTP
-server.
+I<Web servers> accept HTTP requests issued by web clients,
+dispatching those requests to web applications if configured to do so,
+and return HTTP responses to the request-initiating clients.
+
+=item PSGI Server
+
+A I<PSGI Server> is a Perl program providing an environment for a
+I<PSGI application> to run in.
+
+PSGI specifying an interface for web applications and the main purpose
+of web applications being to be served to the Internet, a I<PSGI
+Server> will most likely be either: part of a web server (like Apache
+mod_perl), connected to a web server (with FastCGI, SCGI), invoked by
+a web server (as in plain old CGI), or be a standalone web server
+itself, written entirely or partly in Perl.
+
+There is, however, no requirement for a I<PSGI Server> to actually be
+a web server or part of one, as I<PSGI> only defines an interface
+between the server and the application, not between the server and the
+world.
+
+A I<PSGI Server> is often also called I<PSGI Application Container>
+because it is similar to a I<Java Servlet container>, which is Java
+process providing an environment for I<Java Servlets>.
 
 =item Applications
 
-I<Applications> are web applications that accept an HTTP request
-and return an HTTP response. In PSGI an application is a code reference.
+I<Web applications> accept HTTP requests and return HTTP responses.
+
+I<PSGI applications> are web applications conforming to the PSGI interface,
+prescribing they take the form of a code reference
+with defined input and output.
+
+For simplicity,
+I<PSGI Applications> will also be referred to as I<Applications>
+for the remainder of this document.
 
 =item Middleware
 
@@ -231,53 +256,6 @@ style delayed response and streaming writer object.
 
 =back
 
-The PSGI environment B<MAY> also include the following additional
-extensions. They are B<OPTIONAL> and applications and middleware
-components B<SHOULD> check if they exist in the environment before
-using it.
-
-=over 4
-
-=item *
-
-C<psgix.io>: The raw IO socket to access the client connection to do
-low-level socket operations. This is only available in PSGI servers
-that run as an HTTP server, and should be used when (and only when)
-you want to I<jailbreak> out of PSGI abstraction, to implement
-protocols over HTTP such as BOSH or WebSocket.
-
-=item *
-
-C<psgix.input.buffered>: A boolean which is true if the HTTP request
-body (for POST or PUT requests) is buffered using a temporary
-filehandle or PerlIO in C<psgi.input>. When this is set, applications
-or middleware components can safely C<read> from C<psgi.input> without
-worrying about non-blocking I/O and then can call C<seek> to rewind
-the input for the transparent access.
-
-=item *
-
-C<psgix.logger>: A code reference to log messages. The code reference
-is passed one argument as a hash reference that represents a message
-to be logged. The hash reference B<MUST> include at least two keys:
-C<level> and C<message> where C<level> B<MUST> be one of the following
-strings: C<debug>, C<warn>, C<info>, C<error> and C<fatal>. C<message>
-B<SHOULD> be a plain string or a scalar variable that stringifies.
-
-=item *
-
-C<psgix.session>: A hash reference for storing and retrieving session
-data. Updates made on this hash reference B<SHOULD> be persisted by
-middleware components and B<SHOULD> be restored in the succeeding
-requests. How to persist and restore session data, as well as how to
-identify the requesting clients are implementation specific.
-
-C<psgix.session.options>: A hash reference to tell Middleware
-components how to manipulate session data after the request.
-Acceptable keys and values are implementation specific.
-
-=back
-
 The server or the application can store its own data in the
 environment as well. These keys B<MUST> contain at least one dot, and
 B<SHOULD> be prefixed uniquely.
@@ -285,7 +263,8 @@ B<SHOULD> be prefixed uniquely.
 The C<psgi.> prefix is reserved for use with the PSGI core
 specification, and C<psgix.> prefix is reserved for officially blessed
 extensions. These prefixes B<MUST NOT> be used by other servers or
-application.
+application. See L<psgi-extensions|PSGI::Extentions> for the list of
+officially approved extentions.
 
 The environment B<MUST NOT> contain keys named C<HTTP_CONTENT_TYPE> or
 C<HTTP_CONTENT_LENGTH>.
@@ -388,8 +367,8 @@ or newlines in their name. It B<MUST NOT> contain any keys that end in C<-> or
 C<_>.
 
 All keys B<MUST> consist only of letters, digits, C<_> or C<->. All
-keys B<MUST> start with a letter. The value of the header must be a
-scalar string. The value string B<MUST NOT> contain characters below
+keys B<MUST> start with a letter. The value of the header B<MUST> be a
+scalar string and defined. The value string B<MUST NOT> contain
 characters below octal 037 i.e. chr(31).
 
 If the same key name appears multiple times in an array ref, those
@@ -412,8 +391,10 @@ value can then be appended to the list of headers returned by the application.
 
 =head4 Body
 
-The response body B<MUST> be returned from the application as either an array
-reference or a handle.
+The response body B<MUST> be returned from the application as either
+an array reference or a handle containing the response body as byte
+strings. The body B<MUST> be encoded into appropriate encodings and
+B<MUST NOT> contain wide characters (> 255).
 
 =over 4
 
@@ -440,7 +421,8 @@ L<IO::Handle>-like object.
   open my $body, "<:via(SomePerlIO)", ...;
   my $body = IO::File->new("/path/to/file");
 
-  my $body = SomeClass->new(); # mock class that implements getline() and close()
+  # mock class that implements getline() and close()
+  my $body = SomeClass->new();
 
 Servers B<SHOULD NOT> check the type or class of the body. Instead, they should
 simply call C<getline> to iterate over the body, and
@@ -510,7 +492,8 @@ methods. Again, an example illustrates this best.
       # immediately starts the response and stream the content
       return sub {
           my $responder = shift;
-          my $writer = $responder->([ 200, [ 'Content-Type', 'application/json' ]]);
+          my $writer = $responder->(
+              [ 200, [ 'Content-Type', 'application/json' ]]);
 
           wait_for_events(sub {
               my $new_event = shift;
@@ -543,7 +526,9 @@ I<X-PSGI-Used> to any PSGI application.
   # $app is a simple PSGI application
   my $app = sub {
       my $env = shift;
-      return [ '200', [ 'Content-Type' => 'text/plain' ], [ "Hello World" ] ];
+      return [ '200',
+               [ 'Content-Type' => 'text/plain' ],
+               [ "Hello World" ] ];
   };
 
   # $xheader is a piece of middleware that wraps $app
@@ -660,7 +645,7 @@ order):
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright Tatsuhiko Miyagawa, 2009-2010.
+Copyright Tatsuhiko Miyagawa, 2009-2011.
 
 This document is licensed under the Creative Commons license by-sa.
 
