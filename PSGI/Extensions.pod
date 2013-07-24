@@ -59,6 +59,26 @@ C<psgix.harakiri.commit>: A boolean which is set to true by the PSGI
 application or middleware when it wants the server to kill the worker
 after the current request.
 
+=item *
+
+C<psgix.cleanup> - A boolean flag indicating whether a PSGI server
+supports cleanup handlers. Absence of the key assumes false
+(i.e. unsupported). Middleware and applications MUST check this key
+before utilizing the cleanup handlers.
+
+C<psgix.cleanup.handlers> - Array reference to stack callback
+handlers. This reference MUST be initialized as an empty array
+reference by the servers. Applications can register the callbacks by
+simply push()ing a code reference to this array reference. Callbacks
+will be called once a request is complete, and will receive C<$env>
+as its first argument, and return value of the callbacks will be
+simply ignored. An exception thrown inside callbacks MAY also be
+ignored.
+
+If the server also supports C<psgix.harakiri>, it SHOULD implement in
+a way that cleanup handlers run before harakiri checker, so that the
+cleanup handlers can commit the harakiri flag.
+
 =back
 
 =head1 COPYRIGHT AND LICENSE
